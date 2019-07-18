@@ -1,4 +1,4 @@
-以下都基于mysql8.0
+> 以下都基于mysql8.0
 
 ------
 
@@ -48,11 +48,22 @@ Desc tablename
 
 #### 正则表达式
 
-SELECT COUNT(*) FROM employees WHERE first_name RLIKE '^christ';  或者SELECT COUNT(*) FROM employees WHERE last_name REGEXP 'ba$';
+```sql
+SELECT COUNT(*) FROM employees WHERE first_name RLIKE '^christ';  
+--或者
+SELECT COUNT(*) FROM employees WHERE last_name REGEXP 'ba$';
+```
 
-SELECT COUNT(*) FROM employees WHERE last_name NOT REGEXP '[aeiou]';————lastname中不包含aeiou
+```sql
+SELECT COUNT(*) FROM employees WHERE last_name NOT REGEXP '[aeiou]';
+--lastname中不包含aeiou
+```
 
-order by  可以 ＋数字 表示 对第几个字段（从1开始）排序，与limit 可以合起来用 ，SELECT emp_no,salary FROM salaries ORDER BY 2 DESC LIMIT 5;
+order by  可以 ＋数字 表示 对第几个字段（从1开始）排序，与limit 可以合起来用 ，
+
+```sql
+SELECT emp_no,salary FROM salaries ORDER BY 2 DESC LIMIT 5;
+```
 
 
 
@@ -60,56 +71,66 @@ order by  可以 ＋数字 表示 对第几个字段（从1开始）排序，与
 
   ip可以指定 10.148.%.% ，其中%代表any
 
-​	CREATE USER IF NOT EXISTS  'company_read_only'@'localhost' 
-
-​	IDENTIFIED WITH mysql_native_password 
-
-​	BY 'company_pass' 
-
-​    WITH MAX_QUERIES_PER_HOUR 500 
-
-​	MAX_UPDATES_PER_HOUR 100;
+```sql
+	CREATE USER IF NOT EXISTS  'company_read_only'@'localhost' 
+	IDENTIFIED WITH mysql_native_password 
+	BY 'company_pass' 
+    WITH MAX_QUERIES_PER_HOUR 500 
+	MAX_UPDATES_PER_HOUR 100;
+```
 
 
 
 #### 指定权限，只有部分列
 
-​	GRANT SELECT(salary) ON 
-
-​	employees.salaries TO 'employees_ro'@'%';
+```sql
+	GRANT SELECT(salary) ON 
+	employees.salaries TO 'employees_ro'@'%';
+```
 
 
 
 #### 授权superUser
 
-​	mysql> GRANT ALL ON *.* TO 'dbadmin'@'%';
+​	
+
+```sql
+mysql> GRANT ALL ON *.* TO 'dbadmin'@'%';
+```
 
 
 
 #### 撤权
 
+```sql
 mysql> REVOKE DELETE ON company.* FROM 'company_write'@'%';
 
 mysql> REVOKE SELECT(salary) ON employees.salaries FROM 'employees_ro'@'%';
+```
 
 
 
 #### 设值密码过期
 
+```sql
 ALTER USER 'developer'@'%' PASSWORD EXPIRE INTERVAL 90 DAY;
+```
 
 
 
 #### 给用户上锁、解锁
 
+```sql
 ALTER USER 'developer'@'%' ACCOUNT LOCK;
 
 ALTER USER 'developer'@'%' ACCOUNT UNLOCK;
+```
 
 
 
 #### 创建角色role
 
+```sql
 mysql> CREATE ROLE 'app_read_only','app_writes', 'app_developer';
 
 mysql> GRANT SELECT ON employees.* TO 'app_read_only';
@@ -118,7 +139,8 @@ mysql> GRANT INSERT, UPDATE, DELETE ON employees.* TO 'app_writes';
 
 mysql> GRANT ALL ON employees.* TO 'app_developer';
 
-mysql> GRANT 'app_writes' TO 'emp_writes'@'%'; ——指定host.
+mysql> GRANT 'app_writes' TO 'emp_writes'@'%'; --指定host.
+```
 
 
 
@@ -126,11 +148,59 @@ mysql> GRANT 'app_writes' TO 'emp_writes'@'%'; ——指定host.
 
 - 文件
 
-  mysql> SELECT first_name, last_name INTO OUTFILE 'result.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n' 
+  ```sql
+  mysql> SELECT first_name, last_name INTO OUTFILE 'result.csv' 
+  FIELDS TERMINATED BY ',' 
+  OPTIONALLY ENCLOSED BY '"' 
+  LINES TERMINATED BY '\n' 
+  FROM employees WHERE hire_date<'1986-01-01'
+  LIMIT 10;
+  ```
 
-FROM employees WHERE hire_date<'1986-01-01'
-LIMIT 10;
+
 
 - 表
 
-mysql> CREATE TABLE titles_only AS SELECT DISTINCT title FROM titles;
+  表不存在； 
+
+  ```sql
+  mysql> CREATE TABLE titles_only AS SELECT DISTINCT title FROM titles;
+  ```
+
+  表存在； 
+
+  ```sql
+  mysql> INSERT INTO titles_only SELECT DISTINCT title FROM titles;
+  ```
+
+  
+
+#### 将文件导入表
+
+```sql
+mysql> LOAD DATA INFILE 'result.csv' INTO TABLE
+employee_names
+FIELDS TERMINATED BY ','
+OPTIONALLY ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES; --忽略第一行
+```
+
+如果有重复，要覆盖
+
+```sql
+LOAD DATA INFILE 'result.csv' REPLACE
+INTO TABLE employee_names FIELDS TERMINATED BY ','
+OPTIONALLY ENCLOSED BY '"' LINES TERMINATED
+BY '\n';
+```
+
+如果有重复，要忽略
+
+```sql
+mysql> LOAD DATA INFILE 'result.csv' IGNORE INTO
+TABLE employee_names FIELDS TERMINATED BY ','
+OPTIONALLY ENCLOSED BY '"' LINES TERMINATED
+BY '\n';
+```
+
