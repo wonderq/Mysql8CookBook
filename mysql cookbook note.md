@@ -14,9 +14,21 @@ show Engines/G; 查看引擎
 
 show tables; 查看当前库下的表
 
-show create table xxx\G;   G表示 ，graph   看xxx表的表结构
+show create table xxx\G;   G表示 ，graph   看xxx表的创建语句
 
 show warnings; 看报警
+
+SHOW FUNCTION STATUS\G; 查看库里所有的函数
+
+SHOW CREATE FUNCTION <function_name>\G. 看function的创建语句
+
+SHOW FULL TABLES WHERE TABLE_TYPE LIKE 'VIEW'; 查看所有的视图
+
+SHOW CREATE VIEW salary_view\G；查看创建视图语句
+
+SHOW EVENTS\G；查看所有事件
+
+SHOW CREATE EVENT purge_salary_audit\G；查看创建event的语句
 
 
 
@@ -203,4 +215,317 @@ TABLE employee_names FIELDS TERMINATED BY ','
 OPTIONALLY ENCLOSED BY '"' LINES TERMINATED
 BY '\n';
 ```
+
+
+
+#### 自连接
+
+```sql
+mysql> SELECT
+emp1.* FROM
+employees emp1
+JOIN employees emp2
+ON emp1.first_name=emp2.first_name
+AND emp1.last_name=emp2.last_name
+AND emp1.gender=emp2.gender
+AND emp1.hire_date=emp2.hire_date
+AND emp1.emp_no!=emp2.emp_no
+ORDER BY first_name, last_name;
+```
+
+
+
+#### 子查询
+
+```sql
+SELECT
+first_name,
+last_name
+FROM
+employees
+WHERE
+emp_no
+IN (SELECT emp_no FROM titles WHERE title="Senior
+Engineer" AND from_date="1986-06-26");
+```
+
+
+
+#### 如何查询两张表的不同数据行
+
+使用not in或者outer join（left join）
+
+正常的join是A表与B表的交集，而outer join则不仅仅给了交集的部分，而且以Null的结果对A表不匹配的记录进行连接。所以可以利用这个特性
+
+```sql
+SELECT l1.* FROM employees_list1 l1 LEFT OUTER
+JOIN employees_list2 l2 ON l1.emp_no=l2.emp_no WHERE
+l2.emp_no IS NULL;
+```
+
+
+
+如果使用right join，则左表为null。
+
+#### 存储过程
+
+封装所有的sql语句到一个简单的程序中，不需要返回值。以begin开头和end结尾。
+
+可以通过call语句调用
+
+https://dev.mysql.com/doc/refman/8.0/en/create-procedure.html
+
+举个例子：
+
+```sql
+/* DROP the existing procedure if any with the same name before creating */
+DROP PROCEDURE IF EXISTS create_employee;
+/* Change the delimiter to $$ */
+DELIMITER $$
+/* IN specifies the variables taken as arguments,INOUT specifies the output variable*/
+CREATE PROCEDURE create_employee (OUT new_emp_no INT,
+IN first_name varchar(20), IN last_name varchar(20),
+IN gender enum('M','F'), IN birth_date date, IN
+emp_dept_name varchar(40), IN title varchar(50))
+BEGIN
+/* Declare variables for emp_dept_no and salary */
+DECLARE emp_dept_no char(4);
+DECLARE salary int DEFAULT 60000;
+/* Select the maximum employee number into the variable new_emp_no */
+SELECT max(emp_no) INTO new_emp_no FROM employees;
+/* Increment the new_emp_no */
+SET new_emp_no = new_emp_no + 1;
+/* INSERT the data into employees table */
+/* The function CURDATE() gives the current date) */
+INSERT INTO employees VALUES(new_emp_no,birth_date, first_name, last_name, gender,CURDATE());
+/* Find out the dept_no for dept_name */
+SELECT emp_dept_name;
+SELECT dept_no INTO emp_dept_no FROM departments
+WHERE dept_name=emp_dept_name;
+SELECT emp_dept_no;
+/* Insert into dept_emp */
+INSERT INTO dept_emp VALUES(new_emp_no,emp_dept_no, CURDATE(), '9999-01-01');
+/* Insert into titles */
+INSERT INTO titles VALUES(new_emp_no, title,CURDATE(), '9999-01-01');
+/* Find salary based on title */
+IF title = 'Staff'
+THEN SET salary = 100000;
+ELSEIF title = 'Senior Staff'
+THEN SET salary = 120000;
+END IF;
+/* Insert into salaries */
+INSERT INTO salaries VALUES(new_emp_no, salary,CURDATE(), '9999-01-01');
+END
+$$
+/* Change the delimiter back to ; */
+DELIMITER ;
+```
+
+
+
+调用
+
+```sql
+CALL create_employee(@new_emp_no, 'John','Smith', 'M', '1984-06-19', 'Research', 'Staff');
+```
+
+
+
+#### 函数
+
+函数和存储过程的区别在于，函数有返回值，而且可以通过select语句调用。一般函数用于建华复杂的计算。
+
+举个例子：
+
+```sql
+DROP FUNCTION IF EXISTS get_sal_level;
+DELIMITER $$
+CREATE FUNCTION get_sal_level(emp int) RETURNS
+VARCHAR(10)
+DETERMINISTIC
+BEGIN
+DECLARE sal_level varchar(10);
+DECLARE avg_sal FLOAT;
+SELECT AVG(salary) INTO avg_sal FROM salaries WHERE
+emp_no=emp;
+IF avg_sal < 50000 THEN
+SET sal_level = 'BRONZE';
+ELSEIF (avg_sal >= 50000 AND avg_sal < 70000) THEN
+SET sal_level = 'SILVER';
+ELSEIF (avg_sal >= 70000 AND avg_sal < 90000) THEN
+SET sal_level = 'GOLD';
+ELSEIF (avg_sal >= 90000) THEN
+SET sal_level = 'PLATINUM';
+ELSE
+SET sal_level = 'NOT FOUND';
+END IF;
+RETURN (sal_level);
+END
+$$
+DELIMITER ;
+```
+
+调用
+
+```sql
+SELECT get_sal_level(10002);
+```
+
+https://dev.mysql.com/doc/refman/8.0/en/func-op-summary-ref.html.
+
+#### 内建函数
+
+
+
+mysql提供了很多内建函数。比如CURDATE()，就是当前日期。连接字符串的concat函数
+
+```sql
+SELECT CONCAT(first_name, ' ', last_name)
+```
+
+
+
+#### 触发器
+
+触发器被用来激活某件事情，在要触发的的事件前或者后。例如：每当插入一行，或者更新一行，或者删除一行，你可以有一个触发器。
+
+从mysql5.7开始，一个表可以同时有多个触发器。例如，一个表可以有两个 before insert 的触发器。但是你必须要指定哪个触发在前，哪个在后。可以通过FOLLOWS或PRECEDES关键字来解决。
+
+例如：
+
+```sql
+DROP TRIGGER IF EXISTS salary_round;
+DELIMITER $$
+CREATE TRIGGER salary_round BEFORE INSERT ON salaries
+FOR EACH ROW
+BEGIN
+SET NEW.salary=ROUND(NEW.salary);
+END
+$$
+DELIMITER ;
+```
+
+https://dev.mysql.com/doc/refman/8.0/en/trigger-syntax.html,
+
+
+
+#### 视图
+
+视图是一个基于sql语句结果集的虚拟表。视图隐藏了sql的复杂性，当然，更重要的一点，也提供了安全性。
+
+例如：
+
+创建
+
+```sql
+CREATE ALGORITHM=UNDEFINED
+DEFINER=`root`@`localhost`
+SQL SECURITY DEFINER VIEW salary_view
+AS
+SELECT emp_no, salary FROM salaries WHERE from_date > '2002-01-01';
+```
+
+使用
+
+```sql
+SELECT emp_no, AVG(salary) as avg FROM
+salary_view GROUP BY emp_no ORDER BY avg DESC LIMIT 5;
+```
+
+
+
+
+
+#### 事件
+
+就像linux系统的cron表达式一样，mysql有events来处理调度任务。mysql使用一个特殊的线程，唤做 event 调度线程，来执行所有的调度事件。默认的，这个event 调度线程不开启，如果要开启，需要执行
+
+```sql
+SET GLOBAL event_scheduler = ON;
+```
+
+例如：
+
+```sql
+DROP EVENT IF EXISTS purge_salary_audit;
+DELIMITER $$
+CREATE EVENT IF NOT EXISTS purge_salary_audit
+ON SCHEDULE
+EVERY 1 WEEK
+STARTS CURRENT_DATE
+DO BEGIN
+DELETE FROM salary_audit WHERE date_modified
+< DATE_ADD(CURDATE(), INTERVAL -7 day);
+END $$
+DELIMITER ;
+```
+
+一旦event 被创建，那么它就会自动执行。
+
+让event失效/生效，可以执行如下语句：
+
+```sql
+mysql> ALTER EVENT purge_salary_audit DISABLE;
+mysql> ALTER EVENT purge_salary_audit ENABLE;
+```
+
+
+
+所有的存储过程、函数、触发器、事件、视图都有一个definer。如果definer没有指定，那么创建者将被选择为definer。
+
+https://dev.mysql.com/doc/refman/8.0/en/event-scheduler.html
+
+
+
+#### information_schema数据库
+
+这个information_schema数据库，是一个包含数据库所有对象的元数据。
+
+https://mysqlserverteam.com/mysql-8-0-improvements-to-information_schema/
+
+
+
+##### TABLES表
+
+这个表包含了所有有关表的inxi，例如这个表属于哪个数据库，表的行数，使用的引擎，数据的长度，索引的长度等。
+
+例如：
+
+```sql
+SELECT SUM(DATA_LENGTH)/1024/1024 AS
+DATA_SIZE_MB, SUM(INDEX_LENGTH)/1024/1024 AS
+INDEX_SIZE_MB, SUM(DATA_FREE)/1024/1024 AS
+DATA_FREE_MB FROM INFORMATION_SCHEMA.TABLES WHERE
+TABLE_SCHEMA='employees';
++--------------+---------------+--------------+
+| DATA_SIZE_MB | INDEX_SIZE_MB | DATA_FREE_MB |
++--------------+---------------+--------------+
+| 17.39062500 | 14.62500000 | 11.00000000 |
++--------------+---------------+--------------+
+1 row in set (0.01 sec)
+```
+
+##### COLUMNS表
+
+这个表列出了每个表所有的列，还有列的定义
+
+```sql
+SELECT * FROM COLUMNS WHERE TABLE_NAME='employees'\G
+```
+
+##### FILES表
+
+我们知道，mysql存储数据到innoDb的数据在.ibd文件中(与数据库一个名字，的data 目录)。比如
+
+```sql
+SELECT * FROM FILES WHERE FILE_NAME LIKE
+'./employees/employees.ibd'\G
+~~~
+EXTENT_SIZE: 1048576
+AUTOEXTEND_SIZE: 4194304
+DATA_FREE: 13631488
+~~~
+```
+
+
 
