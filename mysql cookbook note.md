@@ -529,3 +529,171 @@ DATA_FREE: 13631488
 
 
 
+##### INNODB_SYS_TABLESPACES表
+
+像file表一样，也可查询文件的大小
+
+```sql
+mysql> SELECT * FROM INNODB_TABLESPACES WHERE
+NAME='employees/employees'\G
+*************************** 1. row
+***************************
+SPACE: 118
+NAME: employees/employees
+FLAG: 16417
+ROW_FORMAT: Dynamic
+PAGE_SIZE: 16384
+ZIP_PAGE_SIZE: 0
+SPACE_TYPE: Single
+FS_BLOCK_SIZE: 4096
+FILE_SIZE: 32505856
+ALLOCATED_SIZE: 32509952
+1 row in set (0.00 sec)
+```
+
+在linux操作系统中也可核实一下
+
+```shell
+shell> sudo ls -ltr
+/var/lib/mysql/employees/employees.ibd
+-rw-r----- 1 mysql mysql 32505856 Jun 20 16:50
+/var/lib/mysql/employees/employees.ibd
+```
+
+##### INNODB_TABLESPACES表
+
+索引的大小，以及大概的行数，对，这里是大概的。
+
+```sql
+mysql> SELECT * FROM INNODB_TABLESTATS WHERE
+NAME='employees/employees'\G
+*************************** 1. row
+***************************
+TABLE_ID: 128
+NAME: employees/employees
+STATS_INITIALIZED: Initialized
+NUM_ROWS: 299468
+CLUST_INDEX_SIZE: 1057
+OTHER_INDEX_SIZE: 545
+MODIFIED_COUNTER: 0
+AUTOINC: 0
+REF_COUNT: 1
+1 row in set (0.00 sec)
+```
+
+##### PROCESSLIST表
+
+一个最常使用的进程视图展示就是进程表。它列出了服务器上所有的正在运行的查询语句。
+
+```sql
+mysql> SELECT * FROM PROCESSLIST\G
+*************************** 1. row
+***************************
+ID: 85
+USER: event_scheduler
+HOST: localhost
+DB: NULL
+COMMAND: Daemon
+TIME: 44
+STATE: Waiting for next activation
+INFO: NULL
+*************************** 2. row
+***************************
+ID: 26231
+USER: root
+HOST: localhost
+DB: information_schema
+COMMAND: Query
+TIME: 0
+STATE: executing
+INFO: SELECT * FROM PROCESSLIST
+2 rows in set (0.00 sec
+```
+
+或者你可以使用
+
+```sql
+SHOW PROCESSLIST;
+```
+
+得到同样的输出。
+
+
+
+##### 其他的表
+
+**ROUTINES**：包含了函数和存储的规则。
+
+**TRIGGERS**：包含了触发器的定义。
+
+**VIEWS**：包含了视图的定义。
+
+更多：http://mysqlserverteam.com/mysql-8-0-improvements-to-information_schema/.
+
+
+
+
+
+#### JSON
+
+从mysql5.7，mysql支持了JSON的数据类型，早期版本是string 存储的。新的json数据类型提供自动校验格式功能，并优化了存储格式。json记录采用二进制格式存储。
+
+##### 声明
+
+```sql
+CREATE TABLE emp_details(
+emp_no int primary key,
+details json
+);
+```
+
+##### 插入json记录
+
+```sql
+INSERT INTO emp_details(emp_no, details)
+VALUES ('1',
+'{ "location": "IN", "phone": "+11800000000",
+"email": "abc@example.com", "address": { "line1":
+"abc", "line2": "xyz street", "city": "Bangalore",
+"pin": "560103"} }'
+);
+```
+
+##### 获取json记录
+
+```sql
+mysql> SELECT emp_no, details->'$.address.pin' pin
+FROM emp_details;
++--------+----------+
+| emp_no | pin |
++--------+----------+
+| 1 | "560103" |
++--------+----------+
+1 row in set (0.00 sec)
+```
+
+不要双引号
+
+```sql
+mysql> SELECT emp_no, details->>'$.address.pin' pin
+FROM emp_details;
++--------+--------+
+| emp_no | pin |
++--------+--------+
+| 1 | 560103 |
++--------+--------+
+1 row in set (0.00 sec)
+```
+
+##### json函数
+
+JSON_PRETTY()；————美化json
+
+JSON_CONTAINS()；————搜索json
+
+JSON_SET(), JSON_INSERT(), JSON_REPLACE().JSON_REMOVE()等等
+
+JSON_KEYS()；——获取json中所有的key
+
+更多：https://dev.mysql.com/doc/refman/8.0/en/json-function-reference.html.
+
