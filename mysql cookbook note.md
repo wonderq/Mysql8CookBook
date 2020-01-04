@@ -697,3 +697,88 @@ JSON_KEYS()；——获取json中所有的key
 
 更多：https://dev.mysql.com/doc/refman/8.0/en/json-function-reference.html.
 
+#### Common table expressions
+
+mysql8支持Common table expressions，递归的和非递归的。
+
+为啥需要这个玩意？
+
+在同一个查询中不可能两次引用派生表。因此，派生表的计算次数是引用表的两倍或两倍，这表明存在严重的性能问题。使用CTE，子查询只计算一次。
+
+##### 非递归的CTE
+
+通用表表达式（CTE）只是像派生表一样，但是声明放在在查询块之前，而不是在FROM子句中。
+
+```sql
+mysql> SELECT
+q1.year,
+q2.year AS next_year,
+q1.sum,
+q2.sum AS next_sum,
+100*(q2.sum-q1.sum)/q1.sum AS pct
+FROM
+(SELECT year(from_date) as year, sum(salary) as
+sum FROM salaries GROUP BY year) AS q1,
+(SELECT year(from_date) as year, sum(salary) as sum
+FROM salaries GROUP BY year)
+```
+
+上面这个子查询会执行两边，而下面的只会执行一遍
+
+```sql
+mysql>
+WITH CTE AS
+(SELECT year(from_date) AS year, SUM(salary) AS
+sum FROM salaries GROUP BY year)
+SELECT
+q1.year, q2.year as next_year, q1.sum, q2.sum as
+next_sum, 100*(q2.sum-q1.sum)/q1.sum as pct FROM
+CTE AS q1,
+CTE AS q2
+WHERE
+q1.year = q2.year-1;
++------+-----------+-------------+-------------+-----
+-----+
+| year | next_year | sum | next_sum | pct
+| +------+-----------+-------------+-------------+-----
+-----+
+| 1985 | 1986 | 972864875 | 2052895941 |
+111.0155 |
+```
+
+
+
+派生子查询不能互相引用
+
+```sql
+SELECT ...
+FROM (SELECT ... FROM ...) AS d1, (SELECT ... FROM
+d1 ...) AS d2 ...
+ERROR: 1146 (42S02): Table ‘db.d1’ doesn’t exist
+```
+
+而CTE可以
+
+```sql
+WITH d1 AS (SELECT ... FROM ...), d2 AS (SELECT ...
+FROM d1 ...)
+SELECT
+FROM d1, d2 ...
+```
+
+递归的情况：
+
+```sql
+mysql> WITH RECURSIVE employee_paths (id, name, path)
+AS
+(
+SELECT id, name, CAST(id AS CHAR(200))
+FROM employees_mgr
+WHERE manager_id IS NULL
+UNION ALL
+SELECT e.id, e.name, CONCAT(ep.path, ',', e.id)
+FROM employee_paths AS ep JOIN employees_mgr AS e
+ON ep.id = e.manager_id) SELECT *
+FROM employee_paths ORDER BY path;
+```
+
